@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { saveScore } from "@/lib/leaderboard";
 
 const GRID_SIZE = 4;
 
@@ -134,13 +135,15 @@ export default function Game2048({ onBack }) {
       if (moved) {
         addRandomTile(newGrid);
         setGrid(newGrid);
-        setScore((s) => s + totalScored);
+        const newScore = score + totalScored;
+        setScore(newScore);
         if (checkGameOver(newGrid)) {
           setGameOver(true);
+          saveScore("2048", newScore);
         }
       }
     },
-    [grid, gameOver]
+    [grid, score, gameOver]
   );
 
   // Keyboard handler on the container div

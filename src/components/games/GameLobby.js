@@ -53,6 +53,14 @@ export default function GameLobby({ onSelectGame, onClose }) {
         ))}
       </div>
 
+      {/* Leaderboard button */}
+      <button
+        onClick={() => onSelectGame("leaderboard")}
+        className="mt-4 px-6 py-2.5 rounded-xl bg-yellow-600/30 border border-yellow-500/40 hover:border-yellow-400/60 hover:bg-yellow-600/40 text-yellow-200 text-sm font-bold transition-all duration-200"
+      >
+        🏆 排行榜
+      </button>
+
       <button
         onClick={onClose}
         className="mt-6 px-5 py-2 rounded-lg bg-purple-900/40 border border-purple-500/20 hover:bg-purple-800/50 text-purple-200 text-sm font-medium transition-colors duration-150"

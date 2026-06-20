@@ -9,6 +9,7 @@ import GameLobby from "@/components/games/GameLobby";
 import Game2048 from "@/components/games/Game2048";
 import MatchGame from "@/components/games/MatchGame";
 import FishGame from "@/components/games/FishGame";
+import Leaderboard from "@/components/games/Leaderboard";
 
 // 博主信息
 const BLOG_OWNER = {
@@ -24,6 +25,7 @@ function GamesPanel({ onClose }) {
   if (currentGame === "2048") return <Game2048 onBack={() => setCurrentGame(null)} />;
   if (currentGame === "match") return <MatchGame onBack={() => setCurrentGame(null)} />;
   if (currentGame === "fish") return <FishGame onBack={() => setCurrentGame(null)} />;
+  if (currentGame === "leaderboard") return <Leaderboard onBack={() => setCurrentGame(null)} />;
 
   return <GameLobby onSelectGame={setCurrentGame} onClose={onClose} />;
 }

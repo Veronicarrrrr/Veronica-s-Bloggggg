@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState, useCallback } from "react";
+import { saveScore } from "@/lib/leaderboard";
 
 const CANVAS_WIDTH = 640;
 const CANVAS_HEIGHT = 480;
@@ -283,6 +284,7 @@ export default function FishGame({ onBack }) {
             } else if (e.size > gs.player.size * 1.1) {
               // Game over - eaten by bigger fish
               gs.gameOver = true;
+              saveScore("fish", gs.score);
               setGameOver(true);
             }
           }

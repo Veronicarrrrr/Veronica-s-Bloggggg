@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { saveScore } from "@/lib/leaderboard";
 
 const GRID_SIZE = 6;
 const CELL_SIZE = 56;
 const CELL_GAP = 4;
 const GEM_IMG_SIZE = 48;
-const MAX_MOVES = 30;
+const GAME_TIME = 180; // 3 minutes in seconds
 const NUM_GEM_TYPES = 5;
 
 const GEM_SPRITES = [
@@ -134,11 +135,34 @@ function isAdjacent(a, b) {
 export default function MatchGame({ onBack }) {
   const [grid, setGrid] = useState(() => createCleanGrid());
   const [score, setScore] = useState(0);
-  const [moves, setMoves] = useState(MAX_MOVES);
+  const [timeLeft, setTimeLeft] = useState(GAME_TIME);
   const [selected, setSelected] = useState(null); // { r, c } | null
   const [gameOver, setGameOver] = useState(false);
   const [flashing, setFlashing] = useState(null); // Set of "r,c" strings briefly shown white
   const flashTimerRef = useRef(null);
+  const scoreRef = useRef(0);
+
+  // Keep scoreRef in sync
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (gameOver) return;
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setGameOver(true);
+          saveScore("match", scoreRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [gameOver]);
 
   // Cleanup flash timer on unmount
   useEffect(() => {
@@ -150,7 +174,7 @@ export default function MatchGame({ onBack }) {
   const resetGame = useCallback(() => {
     setGrid(createCleanGrid());
     setScore(0);
-    setMoves(MAX_MOVES);
+    setTimeLeft(GAME_TIME);
     setSelected(null);
     setGameOver(false);
     setFlashing(null);
@@ -200,11 +224,6 @@ export default function MatchGame({ onBack }) {
           const { grid: resolved, removed } = removeAndCascade(newGrid);
           setGrid(resolved);
           setScore((s) => s + removed * 10);
-          setMoves((m) => {
-            const next = m - 1;
-            if (next <= 0) setGameOver(true);
-            return next;
-          });
           setFlashing(null);
         }, 200);
       } else {
@@ -273,7 +292,7 @@ export default function MatchGame({ onBack }) {
           }}
         >
           <span>分数: {score}</span>
-          <span>剩余: {moves}步</span>
+          <span>时间: {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}</span>
         </div>
       </div>
 
