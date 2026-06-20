@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PixelRoom from "@/components/PixelRoom";
@@ -28,12 +28,134 @@ function GamesPanel({ onClose }) {
   return <GameLobby onSelectGame={setCurrentGame} onClose={onClose} />;
 }
 
+// ===== 衣柜热区映射（图片从左到右的衣服位置 → outfit id）=====
+const WARDROBE_ZONES = [
+  { id: "adventurer", left: 7, top: 24, width: 21, height: 50 },   // 冒险者斗篷（左1）
+  { id: "witch-robe", left: 27, top: 22, width: 21, height: 54 },  // 女巫魔法袍（左2）
+  { id: "default",    left: 48, top: 22, width: 21, height: 54 },  // 学院校服（左3）
+  { id: "pajama",     left: 69, top: 24, width: 22, height: 48 },  // 睡衣（右1）
+];
+
+function WardrobeHotspots({ outfits, selected, onSelect, ownedOutfits, equippedOutfit, coins, onBuy, onEquip }) {
+  const imgRef = useRef(null);
+  const [overlay, setOverlay] = useState(null);
+
+  const measure = useCallback(() => {
+    const img = imgRef.current;
+    if (!img || !img.naturalWidth) return;
+    const parent = img.parentElement;
+    const pW = parent.clientWidth, pH = parent.clientHeight;
+    const imgRatio = img.naturalWidth / img.naturalHeight;
+    const parentRatio = pW / pH;
+    let rW, rH, oX, oY;
+    if (parentRatio > imgRatio) {
+      rH = pH; rW = pH * imgRatio; oX = (pW - rW) / 2; oY = 0;
+    } else {
+      rW = pW; rH = pW / imgRatio; oX = 0; oY = (pH - rH) / 2;
+    }
+    setOverlay({ left: oX, top: oY, width: rW, height: rH });
+  }, []);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+
+  // 隐藏的图片仅用于测量
+  const selectedOutfit = selected ? outfits.find(o => o.id === selected) : null;
+  const isOwned = selectedOutfit && (selectedOutfit.defaultOwned || ownedOutfits.includes(selectedOutfit.id));
+  const isEquipped = selectedOutfit && equippedOutfit === selectedOutfit.id;
+  const canAfford = selectedOutfit && coins >= selectedOutfit.price;
+
+  return (
+    <>
+      {/* 隐藏测量用图片 */}
+      <img
+        ref={imgRef}
+        src="/image/衣柜-敞开.png"
+        className="absolute inset-0 w-full h-full object-contain pointer-events-none opacity-0"
+        onLoad={measure}
+        alt=""
+      />
+
+      {overlay && (
+        <div className="absolute pointer-events-none" style={{ left: overlay.left, top: overlay.top, width: overlay.width, height: overlay.height }}>
+          {/* 4 个衣服热区 */}
+          {WARDROBE_ZONES.map(zone => (
+            <button
+              key={zone.id}
+              className="absolute pointer-events-auto transition-all duration-200 rounded-lg"
+              style={{
+                left: `${zone.left}%`, top: `${zone.top}%`,
+                width: `${zone.width}%`, height: `${zone.height}%`,
+                background: selected === zone.id ? "rgba(200,170,255,0.2)" : "transparent",
+                boxShadow: selected === zone.id ? "0 0 24px rgba(200,170,255,0.5), inset 0 0 16px rgba(200,170,255,0.15)" : "none",
+                border: selected === zone.id ? "2px solid rgba(200,170,255,0.6)" : "2px solid transparent",
+                cursor: "pointer",
+              }}
+              onClick={(e) => { e.stopPropagation(); onSelect(selected === zone.id ? null : zone.id); }}
+            />
+          ))}
+
+          {/* 选中衣服时弹出信息卡 */}
+          {selectedOutfit && (() => {
+            const zone = WARDROBE_ZONES.find(z => z.id === selected);
+            if (!zone) return null;
+            const cardLeft = zone.left + zone.width / 2;
+            return (
+              <div
+                className="absolute z-20 pointer-events-auto"
+                style={{ left: `${cardLeft}%`, top: `${zone.top - 2}%`, transform: "translate(-50%, -100%)" }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="bg-[#1e1233]/95 backdrop-blur-sm text-white px-5 py-4 rounded-xl border border-purple-400/40 shadow-2xl min-w-[180px] text-center">
+                  <p className="font-bold text-base mb-1">{selectedOutfit.emoji} {selectedOutfit.name}</p>
+                  <p className="text-purple-300/70 text-xs mb-2">{selectedOutfit.description}</p>
+                  {selectedOutfit.price > 0 && (
+                    <p className="text-yellow-400 text-sm font-bold mb-2">🪙 {selectedOutfit.price} 金币</p>
+                  )}
+                  {selectedOutfit.price === 0 && (
+                    <p className="text-green-400 text-sm font-bold mb-2">✨ 免费</p>
+                  )}
+                  {/* 操作按钮 */}
+                  {isEquipped ? (
+                    <span className="text-purple-300 text-xs">✨ 穿戴中</span>
+                  ) : isOwned ? (
+                    <button
+                      onClick={() => onEquip(selectedOutfit.id)}
+                      className="px-4 py-1.5 bg-purple-600/80 hover:bg-purple-500 text-white text-xs rounded-full transition"
+                    >
+                      换上
+                    </button>
+                  ) : canAfford ? (
+                    <button
+                      onClick={() => onBuy(selectedOutfit)}
+                      className="px-4 py-1.5 bg-yellow-600/80 hover:bg-yellow-500 text-white text-xs rounded-full transition"
+                    >
+                      🪙 购买
+                    </button>
+                  ) : (
+                    <span className="text-gray-500 text-xs">金币不足</span>
+                  )}
+                </div>
+                <div className="w-3 h-3 bg-[#1e1233]/95 rotate-45 mx-auto -mt-1.5 border-r border-b border-purple-400/40" />
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </>
+  );
+}
+
 // ===== 衣橱商品 =====
 const OUTFITS = [
   {
     id: "default",
     name: "学院校服",
     emoji: "🎓",
+    image: "/image/衣服-学院制服.png",
     price: 0,
     description: "入学时发放的标准制服，紫色系魔法少女风",
     defaultOwned: true,
@@ -42,6 +164,7 @@ const OUTFITS = [
     id: "adventurer",
     name: "冒险者斗篷",
     emoji: "⚔️",
+    image: "/image/衣服-冒险者斗篷.png",
     price: 100,
     description: "厚实的旅行斗篷，适合踏上未知的冒险旅途",
   },
@@ -49,6 +172,7 @@ const OUTFITS = [
     id: "pajama",
     name: "睡衣",
     emoji: "🌙",
+    image: "/image/衣服-睡衣.png",
     price: 60,
     description: "柔软舒适的居家睡衣，带星星图案",
   },
@@ -56,6 +180,7 @@ const OUTFITS = [
     id: "witch-robe",
     name: "女巫魔法袍",
     emoji: "🔮",
+    image: "/image/衣服-女巫魔法袍.png",
     price: 150,
     description: "传说中高阶女巫才能穿的华丽法袍",
   },
@@ -69,6 +194,8 @@ export default function Home() {
   const [posts, setPosts] = useState([]);
   const [catSleeping, setCatSleeping] = useState(false);
   const [characterProfile, setCharacterProfile] = useState(false);
+  const [wardrobeOpen, setWardrobeOpen] = useState(false);
+  const [wardrobeSelected, setWardrobeSelected] = useState(null); // outfit id or null
 
   // 编辑模式
   const [editMode, setEditMode] = useState(false);
@@ -161,7 +288,8 @@ export default function Home() {
           setModal({ open: true, type: "posts" });
           break;
         case "wardrobe":
-          setModal({ open: true, type: "wardrobe" });
+          setWardrobeOpen(true);
+          setWardrobeSelected(null);
           break;
         case "board":
           fetchGuestbook();
@@ -391,108 +519,42 @@ export default function Home() {
       </Modal>
 
       {/* ========================================== */}
-      {/*              👗 衣橱 — 衣服商城              */}
+      {/*         👗 衣橱 — 全屏衣柜交互页面            */}
       {/* ========================================== */}
-      <Modal
-        isOpen={modal.open && modal.type === "wardrobe"}
-        onClose={closeModal}
-        title="👗 衣橱 — 衣服商城"
-      >
-        <div>
-          {/* 金币余额 */}
-          <div className="flex items-center justify-between mb-4 bg-purple-900/30 rounded-lg px-4 py-2.5 border border-purple-500/20">
-            <span className="text-purple-200 text-sm">我的金币</span>
-            <span className="text-yellow-400 font-bold text-lg">🪙 {coins}</span>
+      {wardrobeOpen && (
+        <div className="fixed inset-0 z-[100] bg-[#1a0e2e] flex items-center justify-center">
+          <div className="relative w-full h-full">
+            {/* 衣柜敞开图 */}
+            <img
+              src="/image/衣柜-敞开.png"
+              className="w-full h-full object-contain"
+              alt="衣柜"
+              draggable={false}
+              onClick={() => setWardrobeSelected(null)}
+            />
+
+            {/* 4个衣服热区叠层 — 需要 JS 测量图片实际渲染区域 */}
+            <WardrobeHotspots
+              outfits={OUTFITS}
+              selected={wardrobeSelected}
+              onSelect={setWardrobeSelected}
+              ownedOutfits={ownedOutfits}
+              equippedOutfit={equippedOutfit}
+              coins={coins}
+              onBuy={buyOutfit}
+              onEquip={equipOutfit}
+            />
+
+            {/* 返回按钮 */}
+            <button
+              onClick={() => { setWardrobeOpen(false); setWardrobeSelected(null); }}
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 px-6 py-2.5 bg-purple-600/80 hover:bg-purple-500 text-white rounded-full font-bold transition-all backdrop-blur-sm border border-purple-400/30 shadow-lg hover:shadow-purple-500/30"
+            >
+              🏠 返回小屋
+            </button>
           </div>
-
-          {/* 当前穿搭 */}
-          <div className="mb-4 bg-gradient-to-r from-purple-900/40 to-indigo-900/40 rounded-lg px-4 py-3 border border-purple-400/20">
-            <p className="text-xs text-purple-400 mb-1">当前穿搭</p>
-            <p className="text-white font-bold">
-              {OUTFITS.find((o) => o.id === equippedOutfit)?.emoji}{" "}
-              {OUTFITS.find((o) => o.id === equippedOutfit)?.name}
-            </p>
-          </div>
-
-          {/* 商品列表 */}
-          <div className="grid grid-cols-2 gap-3">
-            {OUTFITS.map((outfit) => {
-              const isOwned = outfit.defaultOwned || ownedOutfits.includes(outfit.id);
-              const isEquipped = equippedOutfit === outfit.id;
-              const canAfford = coins >= outfit.price;
-
-              return (
-                <div
-                  key={outfit.id}
-                  className={`relative rounded-xl p-3 border transition-all ${
-                    outfit.locked
-                      ? "bg-gray-800/50 border-gray-700/30 opacity-50"
-                      : isEquipped
-                      ? "bg-purple-800/40 border-purple-400/40 shadow-lg shadow-purple-500/10"
-                      : isOwned
-                      ? "bg-purple-900/30 border-purple-500/20 hover:border-purple-400/40"
-                      : "bg-gray-800/30 border-gray-600/20 hover:border-gray-500/30"
-                  }`}
-                >
-                  {/* 已装备标记 */}
-                  {isEquipped && (
-                    <div className="absolute -top-1.5 -right-1.5 bg-purple-500 text-white text-xs px-1.5 py-0.5 rounded-full font-bold">
-                      穿戴中
-                    </div>
-                  )}
-
-                  {/* 图标 */}
-                  <div className="text-3xl text-center mb-2">{outfit.emoji}</div>
-
-                  {/* 名字 */}
-                  <p className="text-white text-sm font-bold text-center mb-1">
-                    {outfit.name}
-                  </p>
-
-                  {/* 描述 */}
-                  <p className="text-gray-400 text-xs text-center mb-2 leading-relaxed">
-                    {outfit.description}
-                  </p>
-
-                  {/* 操作按钮 */}
-                  {!outfit.locked && (
-                    <div className="text-center">
-                      {isOwned ? (
-                        isEquipped ? (
-                          <span className="text-purple-300 text-xs">✨ 穿戴中</span>
-                        ) : (
-                          <button
-                            onClick={() => equipOutfit(outfit.id)}
-                            className="px-3 py-1 bg-purple-600/70 hover:bg-purple-600 text-white text-xs rounded-full transition"
-                          >
-                            换上
-                          </button>
-                        )
-                      ) : (
-                        <button
-                          onClick={() => buyOutfit(outfit)}
-                          disabled={!canAfford}
-                          className={`px-3 py-1 text-xs rounded-full transition ${
-                            canAfford
-                              ? "bg-yellow-600/70 hover:bg-yellow-600 text-white"
-                              : "bg-gray-700/50 text-gray-500 cursor-not-allowed"
-                          }`}
-                        >
-                          🪙 {outfit.price} 购买
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <p className="text-center text-purple-400/40 text-xs mt-4">
-            💡 更多衣服设计中... 敬请期待！
-          </p>
         </div>
-      </Modal>
+      )}
 
       {/* ========================================== */}
       {/*             🖼️ 画板 — 访客留言板              */}

@@ -1,91 +1,94 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 
 const GRID_SIZE = 6;
-const CANVAS_WIDTH = 300;
-const CANVAS_HEIGHT = 360; // extra for UI
-const GEM_GAP = 4;
-const GRID_PADDING = 6;
-const GRID_TOP = 60;
-const GEM_SIZE =
-  (CANVAS_WIDTH - GRID_PADDING * 2 - GEM_GAP * (GRID_SIZE + 1)) / GRID_SIZE;
+const CELL_SIZE = 56;
+const CELL_GAP = 4;
+const GEM_IMG_SIZE = 48;
+const MAX_MOVES = 30;
+const NUM_GEM_TYPES = 5;
 
-const GEM_COLORS = [
-  { fill: "#e74c3c", light: "#ff7675" }, // red
-  { fill: "#3498db", light: "#74b9ff" }, // blue
-  { fill: "#27ae60", light: "#55efc4" }, // green
-  { fill: "#f1c40f", light: "#ffeaa7" }, // yellow
-  { fill: "#9b59b6", light: "#dda0dd" }, // purple
+const GEM_SPRITES = [
+  "/image/消消乐1-药水.png",
+  "/image/消消乐2-女巫帽.png",
+  "/image/消消乐3-水晶球.png",
+  "/image/消消乐4-魔法棒.png",
+  "/image/消消乐5-糖果.png",
 ];
 
-const MAX_MOVES = 30;
+// --- Pure logic helpers (no React state) ---
 
-function createGrid() {
-  let g;
-  do {
-    g = Array.from({ length: GRID_SIZE }, () =>
-      Array.from({ length: GRID_SIZE }, () =>
-        Math.floor(Math.random() * GEM_COLORS.length)
-      )
-    );
-  } while (findMatches(g).length > 0);
-  return g;
+function randomGem() {
+  return Math.floor(Math.random() * NUM_GEM_TYPES);
+}
+
+function cloneGrid(g) {
+  return g.map((row) => [...row]);
 }
 
 function findMatches(grid) {
-  const matches = new Set();
+  const matched = Array.from({ length: GRID_SIZE }, () =>
+    Array.from({ length: GRID_SIZE }, () => false)
+  );
 
-  // Horizontal
+  // Horizontal runs of 3+
   for (let r = 0; r < GRID_SIZE; r++) {
     for (let c = 0; c < GRID_SIZE - 2; c++) {
-      if (
-        grid[r][c] !== -1 &&
-        grid[r][c] === grid[r][c + 1] &&
-        grid[r][c] === grid[r][c + 2]
-      ) {
-        matches.add(`${r},${c}`);
-        matches.add(`${r},${c + 1}`);
-        matches.add(`${r},${c + 2}`);
+      const v = grid[r][c];
+      if (v < 0) continue;
+      if (v === grid[r][c + 1] && v === grid[r][c + 2]) {
+        matched[r][c] = true;
+        matched[r][c + 1] = true;
+        matched[r][c + 2] = true;
       }
     }
   }
 
-  // Vertical
+  // Vertical runs of 3+
   for (let r = 0; r < GRID_SIZE - 2; r++) {
     for (let c = 0; c < GRID_SIZE; c++) {
-      if (
-        grid[r][c] !== -1 &&
-        grid[r][c] === grid[r + 1][c] &&
-        grid[r][c] === grid[r + 2][c]
-      ) {
-        matches.add(`${r},${c}`);
-        matches.add(`${r + 1},${c}`);
-        matches.add(`${r + 2},${c}`);
+      const v = grid[r][c];
+      if (v < 0) continue;
+      if (v === grid[r + 1][c] && v === grid[r + 2][c]) {
+        matched[r][c] = true;
+        matched[r + 1][c] = true;
+        matched[r + 2][c] = true;
       }
     }
   }
 
-  return Array.from(matches).map((s) => {
-    const [r, c] = s.split(",").map(Number);
-    return { r, c };
-  });
+  const result = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (matched[r][c]) result.push({ r, c });
+    }
+  }
+  return result;
 }
 
+function hasMatches(grid) {
+  return findMatches(grid).length > 0;
+}
+
+/** Remove matched gems, cascade columns down, fill new gems from top.
+ *  Repeats until no more matches. Returns { grid, removed }. */
 function removeAndCascade(grid) {
+  let g = cloneGrid(grid);
   let totalRemoved = 0;
-  let g = grid.map((row) => [...row]);
 
   while (true) {
     const matches = findMatches(g);
     if (matches.length === 0) break;
 
     totalRemoved += matches.length;
+
+    // Mark matched cells as empty (-1)
     for (const { r, c } of matches) {
       g[r][c] = -1;
     }
 
-    // Cascade: drop gems down
+    // Gravity: compact each column downward
     for (let c = 0; c < GRID_SIZE; c++) {
       let writeRow = GRID_SIZE - 1;
       for (let r = GRID_SIZE - 1; r >= 0; r--) {
@@ -95,9 +98,9 @@ function removeAndCascade(grid) {
           writeRow--;
         }
       }
-      // Fill top with new gems
+      // Fill empty cells at the top with new random gems
       for (let r = writeRow; r >= 0; r--) {
-        g[r][c] = Math.floor(Math.random() * GEM_COLORS.length);
+        g[r][c] = randomGem();
       }
     }
   }
@@ -105,216 +108,301 @@ function removeAndCascade(grid) {
   return { grid: g, removed: totalRemoved };
 }
 
+/** Generate a grid guaranteed to have zero initial matches. */
+function createCleanGrid() {
+  let g;
+  let attempts = 0;
+  do {
+    g = Array.from({ length: GRID_SIZE }, () =>
+      Array.from({ length: GRID_SIZE }, () => randomGem())
+    );
+    attempts++;
+    if (attempts > 500) break; // safety valve
+  } while (hasMatches(g));
+  return g;
+}
+
+function isAdjacent(a, b) {
+  return (
+    (Math.abs(a.r - b.r) === 1 && a.c === b.c) ||
+    (Math.abs(a.c - b.c) === 1 && a.r === b.r)
+  );
+}
+
+// --- Component ---
+
 export default function MatchGame({ onBack }) {
-  const canvasRef = useRef(null);
-  const [grid, setGrid] = useState(() => createGrid());
+  const [grid, setGrid] = useState(() => createCleanGrid());
   const [score, setScore] = useState(0);
   const [moves, setMoves] = useState(MAX_MOVES);
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState(null); // { r, c } | null
   const [gameOver, setGameOver] = useState(false);
-  const animFrameRef = useRef(null);
+  const [flashing, setFlashing] = useState(null); // Set of "r,c" strings briefly shown white
+  const flashTimerRef = useRef(null);
 
-  function getGemPos(row, col) {
-    const x = GRID_PADDING + GEM_GAP + col * (GEM_SIZE + GEM_GAP);
-    const y = GRID_TOP + GEM_GAP + row * (GEM_SIZE + GEM_GAP);
-    return { x, y };
-  }
-
-  function getCellFromPixel(px, py) {
-    const col = Math.floor(
-      (px - GRID_PADDING - GEM_GAP) / (GEM_SIZE + GEM_GAP)
-    );
-    const row = Math.floor(
-      (py - GRID_TOP - GEM_GAP) / (GEM_SIZE + GEM_GAP)
-    );
-    if (row >= 0 && row < GRID_SIZE && col >= 0 && col < GRID_SIZE) {
-      return { r: row, c: col };
-    }
-    return null;
-  }
-
-  function isAdjacent(a, b) {
-    return (
-      (Math.abs(a.r - b.r) === 1 && a.c === b.c) ||
-      (Math.abs(a.c - b.c) === 1 && a.r === b.r)
-    );
-  }
-
-  const handleClick = useCallback(
-    (e) => {
-      if (gameOver) return;
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = CANVAS_WIDTH / rect.width;
-      const scaleY = CANVAS_HEIGHT / rect.height;
-      const px = (e.clientX - rect.left) * scaleX;
-      const py = (e.clientY - rect.top) * scaleY;
-
-      const cell = getCellFromPixel(px, py);
-      if (!cell) return;
-
-      if (!selected) {
-        setSelected(cell);
-      } else {
-        if (isAdjacent(selected, cell)) {
-          // Try swap
-          const newGrid = grid.map((row) => [...row]);
-          const temp = newGrid[selected.r][selected.c];
-          newGrid[selected.r][selected.c] = newGrid[cell.r][cell.c];
-          newGrid[cell.r][cell.c] = temp;
-
-          const matches = findMatches(newGrid);
-          if (matches.length > 0) {
-            const { grid: resolved, removed } = removeAndCascade(newGrid);
-            setGrid(resolved);
-            setScore((s) => s + removed * 10);
-            const newMoves = moves - 1;
-            setMoves(newMoves);
-            if (newMoves <= 0) setGameOver(true);
-          }
-          // else: invalid swap, do nothing (swap back implicitly by not updating)
-        }
-        setSelected(null);
-      }
-    },
-    [grid, selected, moves, gameOver]
-  );
-
-  // Canvas click handler
+  // Cleanup flash timer on unmount
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener("click", handleClick);
-    return () => canvas.removeEventListener("click", handleClick);
-  }, [handleClick]);
-
-  // Render loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-
-    const render = () => {
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      // Background
-      ctx.fillStyle = "#1a0a2e";
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      // UI: Score + Moves
-      ctx.fillStyle = "#e8d5f5";
-      ctx.font = "bold 15px monospace";
-      ctx.textAlign = "left";
-      ctx.fillText(`分数: ${score}`, 10, 25);
-      ctx.textAlign = "right";
-      ctx.fillText(`剩余: ${moves}步`, CANVAS_WIDTH - 10, 25);
-
-      // Grid background
-      ctx.fillStyle = "#2d1b4e";
-      const gridW = CANVAS_WIDTH - GRID_PADDING * 2;
-      const gridH = gridW;
-      ctx.beginPath();
-      ctx.roundRect(GRID_PADDING, GRID_TOP, gridW, gridH, 8);
-      ctx.fill();
-
-      // Gems
-      for (let r = 0; r < GRID_SIZE; r++) {
-        for (let c = 0; c < GRID_SIZE; c++) {
-          const gemType = grid[r][c];
-          if (gemType < 0 || gemType >= GEM_COLORS.length) continue;
-          const { x, y } = getGemPos(r, c);
-          const color = GEM_COLORS[gemType];
-
-          // Selection highlight
-          if (selected && selected.r === r && selected.c === c) {
-            ctx.strokeStyle = "#FFD700";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.roundRect(x - 2, y - 2, GEM_SIZE + 4, GEM_SIZE + 4, 6);
-            ctx.stroke();
-          }
-
-          // Gem body
-          ctx.fillStyle = color.fill;
-          ctx.beginPath();
-          ctx.roundRect(x, y, GEM_SIZE, GEM_SIZE, 5);
-          ctx.fill();
-
-          // Pixel highlight (top-left lighter corner)
-          ctx.fillStyle = color.light;
-          ctx.globalAlpha = 0.5;
-          ctx.beginPath();
-          ctx.roundRect(x + 2, y + 2, GEM_SIZE * 0.4, GEM_SIZE * 0.4, 3);
-          ctx.fill();
-          ctx.globalAlpha = 1.0;
-        }
-      }
-
-      // Game over overlay
-      if (gameOver) {
-        ctx.fillStyle = "rgba(26, 10, 46, 0.88)";
-        ctx.fillRect(0, GRID_TOP, CANVAS_WIDTH, gridH);
-        ctx.fillStyle = "#FFD700";
-        ctx.font = "bold 24px monospace";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(
-          "游戏结束!",
-          CANVAS_WIDTH / 2,
-          GRID_TOP + gridH / 2 - 20
-        );
-        ctx.fillStyle = "#e8d5f5";
-        ctx.font = "bold 16px monospace";
-        ctx.fillText(
-          `最终分数: ${score}`,
-          CANVAS_WIDTH / 2,
-          GRID_TOP + gridH / 2 + 15
-        );
-      }
-
-      animFrameRef.current = requestAnimationFrame(render);
-    };
-
-    animFrameRef.current = requestAnimationFrame(render);
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     };
-  }, [grid, score, moves, selected, gameOver]);
+  }, []);
 
-  function resetGame() {
-    setGrid(createGrid());
+  const resetGame = useCallback(() => {
+    setGrid(createCleanGrid());
     setScore(0);
     setMoves(MAX_MOVES);
     setSelected(null);
     setGameOver(false);
-  }
+    setFlashing(null);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+  }, []);
+
+  const handleCellClick = useCallback(
+    (r, c) => {
+      if (gameOver) return;
+      if (flashing) return; // ignore clicks during flash animation
+
+      if (!selected) {
+        // First selection
+        setSelected({ r, c });
+        return;
+      }
+
+      // Clicking the same cell again → deselect
+      if (selected.r === r && selected.c === c) {
+        setSelected(null);
+        return;
+      }
+
+      // Clicking a non-adjacent cell → select the new one instead
+      if (!isAdjacent(selected, { r, c })) {
+        setSelected({ r, c });
+        return;
+      }
+
+      // Adjacent cell clicked → attempt swap
+      const newGrid = cloneGrid(grid);
+      // Swap
+      const temp = newGrid[selected.r][selected.c];
+      newGrid[selected.r][selected.c] = newGrid[r][c];
+      newGrid[r][c] = temp;
+
+      const matches = findMatches(newGrid);
+
+      if (matches.length > 0) {
+        // Valid move: flash matched cells, then resolve cascade
+        const flashSet = new Set(matches.map((m) => `${m.r},${m.c}`));
+        setFlashing(flashSet);
+        setGrid(newGrid); // show the swapped state immediately
+        setSelected(null);
+
+        flashTimerRef.current = setTimeout(() => {
+          const { grid: resolved, removed } = removeAndCascade(newGrid);
+          setGrid(resolved);
+          setScore((s) => s + removed * 10);
+          setMoves((m) => {
+            const next = m - 1;
+            if (next <= 0) setGameOver(true);
+            return next;
+          });
+          setFlashing(null);
+        }, 200);
+      } else {
+        // No match → swap back (instant), deselect
+        setSelected(null);
+      }
+    },
+    [grid, selected, gameOver, flashing]
+  );
+
+  // Computed grid dimensions
+  const gridPx = GRID_SIZE * CELL_SIZE + (GRID_SIZE - 1) * CELL_GAP;
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="flex items-center justify-between w-full max-w-[300px] mb-2">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        width: "100%",
+        maxWidth: gridPx + 40,
+        margin: "0 auto",
+        backgroundImage: "url('/image/小游戏背景图.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        borderRadius: 12,
+        padding: "16px 20px 20px",
+        position: "relative",
+        minHeight: gridPx + 140,
+      }}
+    >
+      {/* Top bar: back button + score + moves */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          marginBottom: 12,
+        }}
+      >
         <button
           onClick={onBack}
-          className="text-sm text-purple-300 hover:text-purple-100 transition-colors"
+          style={{
+            background: "none",
+            border: "none",
+            color: "#c4b5fd",
+            cursor: "pointer",
+            fontSize: 14,
+            fontFamily: "monospace",
+            padding: "4px 8px",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#e9d5ff")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "#c4b5fd")}
         >
           ← 返回
         </button>
+        <div
+          style={{
+            display: "flex",
+            gap: 20,
+            fontSize: 15,
+            fontWeight: "bold",
+            fontFamily: "monospace",
+            color: "#e8d5f5",
+          }}
+        >
+          <span>分数: {score}</span>
+          <span>剩余: {moves}步</span>
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: `repeat(${GRID_SIZE}, ${CELL_SIZE}px)`,
+          gridTemplateRows: `repeat(${GRID_SIZE}, ${CELL_SIZE}px)`,
+          gap: CELL_GAP,
+          background: "rgba(30, 18, 51, 0.4)",
+          borderRadius: 10,
+          padding: CELL_GAP,
+          position: "relative",
+        }}
+      >
+        {grid.map((row, r) =>
+          row.map((gemType, c) => {
+            const isSelected =
+              selected && selected.r === r && selected.c === c;
+            const isFlashing = flashing && flashing.has(`${r},${c}`);
+            return (
+              <div
+                key={`${r}-${c}`}
+                onClick={() => handleCellClick(r, c)}
+                style={{
+                  width: CELL_SIZE,
+                  height: CELL_SIZE,
+                  borderRadius: 6,
+                  background: isFlashing
+                    ? "rgba(255, 255, 255, 0.85)"
+                    : "rgba(50, 30, 80, 0.5)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: gameOver ? "default" : "pointer",
+                  boxSizing: "border-box",
+                  border: isSelected
+                    ? "2.5px solid #FFD700"
+                    : "2.5px solid transparent",
+                  boxShadow: isSelected
+                    ? "0 0 8px 2px rgba(255, 215, 0, 0.5)"
+                    : "none",
+                  transition: "border 0.1s, box-shadow 0.1s, background 0.15s",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                }}
+              >
+                {gemType >= 0 && gemType < NUM_GEM_TYPES && !isFlashing && (
+                  <img
+                    src={GEM_SPRITES[gemType]}
+                    alt=""
+                    draggable={false}
+                    style={{
+                      width: GEM_IMG_SIZE,
+                      height: GEM_IMG_SIZE,
+                      objectFit: "contain",
+                      pointerEvents: "none",
+                      imageRendering: "pixelated",
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })
+        )}
+
+        {/* Game over overlay on grid */}
         {gameOver && (
-          <button
-            onClick={resetGame}
-            className="text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white transition-colors"
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(26, 10, 46, 0.88)",
+              borderRadius: 10,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              zIndex: 10,
+            }}
           >
-            再来一局
-          </button>
+            <div
+              style={{
+                color: "#FFD700",
+                fontSize: 24,
+                fontWeight: "bold",
+                fontFamily: "monospace",
+              }}
+            >
+              游戏结束!
+            </div>
+            <div
+              style={{
+                color: "#e8d5f5",
+                fontSize: 16,
+                fontWeight: "bold",
+                fontFamily: "monospace",
+              }}
+            >
+              最终分数: {score}
+            </div>
+            <button
+              onClick={resetGame}
+              style={{
+                marginTop: 8,
+                padding: "8px 24px",
+                borderRadius: 6,
+                border: "none",
+                background: "#7c3aed",
+                color: "#fff",
+                fontSize: 15,
+                fontFamily: "monospace",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#6d28d9")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#7c3aed")
+              }
+            >
+              再来一局
+            </button>
+          </div>
         )}
       </div>
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="rounded-lg border border-purple-500/30 cursor-pointer"
-        style={{ touchAction: "none" }}
-      />
     </div>
   );
 }

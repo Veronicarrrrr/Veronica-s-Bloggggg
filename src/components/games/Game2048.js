@@ -1,102 +1,103 @@
 "use client";
 
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 
 const GRID_SIZE = 4;
-const CANVAS_WIDTH = 320;
-const CANVAS_HEIGHT = 370; // extra space for score
-const TILE_GAP = 8;
-const GRID_PADDING = 10;
-const GRID_TOP = 50;
-const TILE_SIZE =
-  (CANVAS_WIDTH - GRID_PADDING * 2 - TILE_GAP * (GRID_SIZE + 1)) / GRID_SIZE;
 
 const TILE_COLORS = {
-  0: "#2d1b4e",
-  2: "#e8d5f5",
-  4: "#d4b3ed",
-  8: "#bb8fe0",
-  16: "#a66bd4",
-  32: "#8e47c7",
-  64: "#7623ba",
-  128: "#5e0fa6",
-  256: "#4a0b85",
-  512: "#360764",
-  1024: "#220343",
+  0: "transparent",
+  2: "#f3e8ff",
+  4: "#e9d5ff",
+  8: "#d8b4fe",
+  16: "#c084fc",
+  32: "#a855f7",
+  64: "#9333ea",
+  128: "#7e22ce",
+  256: "#6b21a8",
+  512: "#581c87",
+  1024: "#3b0764",
   2048: "#FFD700",
 };
 
 function getTextColor(value) {
-  if (value <= 4) return "#1a0a2e";
-  if (value === 2048) return "#1a0a2e";
+  if (value === 0) return "transparent";
+  if (value <= 4) return "#4a1d8a";
+  if (value === 2048) return "#4a1d8a";
   return "#ffffff";
 }
 
+function getFontSize(value) {
+  if (value >= 1024) return "1.1rem";
+  if (value >= 128) return "1.3rem";
+  return "1.6rem";
+}
+
+function createEmptyGrid() {
+  return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(0));
+}
+
+function addRandomTile(grid) {
+  const empty = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c] === 0) empty.push({ r, c });
+    }
+  }
+  if (empty.length === 0) return;
+  const cell = empty[Math.floor(Math.random() * empty.length)];
+  grid[cell.r][cell.c] = Math.random() < 0.9 ? 2 : 4;
+}
+
+function initGrid() {
+  const g = createEmptyGrid();
+  addRandomTile(g);
+  addRandomTile(g);
+  return g;
+}
+
+function checkGameOver(grid) {
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c] === 0) return false;
+      if (c < GRID_SIZE - 1 && grid[r][c] === grid[r][c + 1]) return false;
+      if (r < GRID_SIZE - 1 && grid[r][c] === grid[r + 1][c]) return false;
+    }
+  }
+  return true;
+}
+
+function slideRow(row) {
+  let arr = row.filter((v) => v !== 0);
+  let scored = 0;
+  for (let i = 0; i < arr.length - 1; i++) {
+    if (arr[i] === arr[i + 1]) {
+      arr[i] *= 2;
+      scored += arr[i];
+      arr.splice(i + 1, 1);
+    }
+  }
+  while (arr.length < GRID_SIZE) arr.push(0);
+  return { result: arr, scored };
+}
+
 export default function Game2048({ onBack }) {
-  const canvasRef = useRef(null);
   const [grid, setGrid] = useState(() => initGrid());
   const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
+  const containerRef = useRef(null);
   const touchStart = useRef({ x: 0, y: 0 });
-  const animFrameRef = useRef(null);
-
-  function initGrid() {
-    const g = Array.from({ length: GRID_SIZE }, () =>
-      Array(GRID_SIZE).fill(0)
-    );
-    addRandom(g);
-    addRandom(g);
-    return g;
-  }
-
-  function addRandom(g) {
-    const empty = [];
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        if (g[r][c] === 0) empty.push({ r, c });
-      }
-    }
-    if (empty.length === 0) return;
-    const cell = empty[Math.floor(Math.random() * empty.length)];
-    g[cell.r][cell.c] = Math.random() < 0.9 ? 2 : 4;
-  }
-
-  function checkGameOver(g) {
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        if (g[r][c] === 0) return false;
-        if (c < GRID_SIZE - 1 && g[r][c] === g[r][c + 1]) return false;
-        if (r < GRID_SIZE - 1 && g[r][c] === g[r + 1][c]) return false;
-      }
-    }
-    return true;
-  }
-
-  function slide(row) {
-    let arr = row.filter((v) => v !== 0);
-    let scored = 0;
-    for (let i = 0; i < arr.length - 1; i++) {
-      if (arr[i] === arr[i + 1]) {
-        arr[i] *= 2;
-        scored += arr[i];
-        arr.splice(i + 1, 1);
-      }
-    }
-    while (arr.length < GRID_SIZE) arr.push(0);
-    return { result: arr, scored };
-  }
 
   const move = useCallback(
     (direction) => {
       if (gameOver) return;
 
-      let newGrid = grid.map((row) => [...row]);
+      const newGrid = grid.map((row) => [...row]);
       let totalScored = 0;
       let moved = false;
 
       if (direction === "left") {
         for (let r = 0; r < GRID_SIZE; r++) {
-          const { result, scored } = slide(newGrid[r]);
+          const { result, scored } = slideRow(newGrid[r]);
           if (newGrid[r].join(",") !== result.join(",")) moved = true;
           newGrid[r] = result;
           totalScored += scored;
@@ -104,7 +105,7 @@ export default function Game2048({ onBack }) {
       } else if (direction === "right") {
         for (let r = 0; r < GRID_SIZE; r++) {
           const reversed = [...newGrid[r]].reverse();
-          const { result, scored } = slide(reversed);
+          const { result, scored } = slideRow(reversed);
           const final = result.reverse();
           if (newGrid[r].join(",") !== final.join(",")) moved = true;
           newGrid[r] = final;
@@ -113,7 +114,7 @@ export default function Game2048({ onBack }) {
       } else if (direction === "up") {
         for (let c = 0; c < GRID_SIZE; c++) {
           const col = newGrid.map((row) => row[c]);
-          const { result, scored } = slide(col);
+          const { result, scored } = slideRow(col);
           if (col.join(",") !== result.join(",")) moved = true;
           for (let r = 0; r < GRID_SIZE; r++) newGrid[r][c] = result[r];
           totalScored += scored;
@@ -121,7 +122,7 @@ export default function Game2048({ onBack }) {
       } else if (direction === "down") {
         for (let c = 0; c < GRID_SIZE; c++) {
           const col = newGrid.map((row) => row[c]).reverse();
-          const { result, scored } = slide(col);
+          const { result, scored } = slideRow(col);
           const final = result.reverse();
           const origCol = newGrid.map((row) => row[c]);
           if (origCol.join(",") !== final.join(",")) moved = true;
@@ -131,7 +132,7 @@ export default function Game2048({ onBack }) {
       }
 
       if (moved) {
-        addRandom(newGrid);
+        addRandomTile(newGrid);
         setGrid(newGrid);
         setScore((s) => s + totalScored);
         if (checkGameOver(newGrid)) {
@@ -142,32 +143,33 @@ export default function Game2048({ onBack }) {
     [grid, gameOver]
   );
 
-  // Keyboard controls
-  useEffect(() => {
-    const handleKey = (e) => {
-      if (
-        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)
-      ) {
+  // Keyboard handler on the container div
+  const handleKeyDown = useCallback(
+    (e) => {
+      const keyMap = {
+        ArrowLeft: "left",
+        ArrowRight: "right",
+        ArrowUp: "up",
+        ArrowDown: "down",
+      };
+      const dir = keyMap[e.key];
+      if (dir) {
         e.preventDefault();
-        const dir = e.key.replace("Arrow", "").toLowerCase();
+        e.stopPropagation();
         move(dir);
       }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [move]);
+    },
+    [move]
+  );
 
-  // Touch controls
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Touch swipe handlers
+  const handleTouchStart = useCallback((e) => {
+    const touch = e.touches[0];
+    touchStart.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
 
-    const handleTouchStart = (e) => {
-      const touch = e.touches[0];
-      touchStart.current = { x: touch.clientX, y: touch.clientY };
-    };
-
-    const handleTouchEnd = (e) => {
+  const handleTouchEnd = useCallback(
+    (e) => {
       const touch = e.changedTouches[0];
       const dx = touch.clientX - touchStart.current.x;
       const dy = touch.clientY - touchStart.current.y;
@@ -182,128 +184,287 @@ export default function Game2048({ onBack }) {
           move(dy > 0 ? "down" : "up");
         }
       }
-    };
+    },
+    [move]
+  );
 
-    canvas.addEventListener("touchstart", handleTouchStart, { passive: true });
-    canvas.addEventListener("touchend", handleTouchEnd, { passive: true });
-    return () => {
-      canvas.removeEventListener("touchstart", handleTouchStart);
-      canvas.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [move]);
-
-  // Render
+  // Auto-focus on mount
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-
-    const render = () => {
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      // Background
-      ctx.fillStyle = "#1a0a2e";
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      // Score
-      ctx.fillStyle = "#e8d5f5";
-      ctx.font = "bold 18px monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(`分数: ${score}`, CANVAS_WIDTH / 2, 30);
-
-      // Grid background
-      ctx.fillStyle = "#2d1b4e";
-      const gridW = CANVAS_WIDTH - GRID_PADDING * 2;
-      const gridH = gridW;
-      ctx.beginPath();
-      ctx.roundRect(GRID_PADDING, GRID_TOP, gridW, gridH, 8);
-      ctx.fill();
-
-      // Tiles
-      for (let r = 0; r < GRID_SIZE; r++) {
-        for (let c = 0; c < GRID_SIZE; c++) {
-          const value = grid[r][c];
-          const x = GRID_PADDING + TILE_GAP + c * (TILE_SIZE + TILE_GAP);
-          const y = GRID_TOP + TILE_GAP + r * (TILE_SIZE + TILE_GAP);
-
-          ctx.fillStyle = TILE_COLORS[value] || TILE_COLORS[2048];
-          ctx.beginPath();
-          ctx.roundRect(x, y, TILE_SIZE, TILE_SIZE, 6);
-          ctx.fill();
-
-          if (value !== 0) {
-            ctx.fillStyle = getTextColor(value);
-            const fontSize = value >= 1024 ? 14 : value >= 128 ? 18 : 22;
-            ctx.font = `bold ${fontSize}px monospace`;
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(
-              String(value),
-              x + TILE_SIZE / 2,
-              y + TILE_SIZE / 2
-            );
-          }
-        }
-      }
-
-      // Game over overlay
-      if (gameOver) {
-        ctx.fillStyle = "rgba(26, 10, 46, 0.85)";
-        ctx.fillRect(0, GRID_TOP, CANVAS_WIDTH, gridH);
-        ctx.fillStyle = "#FFD700";
-        ctx.font = "bold 28px monospace";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("游戏结束!", CANVAS_WIDTH / 2, GRID_TOP + gridH / 2 - 20);
-        ctx.fillStyle = "#e8d5f5";
-        ctx.font = "bold 16px monospace";
-        ctx.fillText(
-          `最终分数: ${score}`,
-          CANVAS_WIDTH / 2,
-          GRID_TOP + gridH / 2 + 15
-        );
-      }
-
-      animFrameRef.current = requestAnimationFrame(render);
-    };
-
-    animFrameRef.current = requestAnimationFrame(render);
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [grid, score, gameOver]);
+    if (containerRef.current) {
+      containerRef.current.focus();
+    }
+  }, []);
 
   function resetGame() {
     setGrid(initGrid());
     setScore(0);
     setGameOver(false);
+    setTimeout(() => {
+      if (containerRef.current) containerRef.current.focus();
+    }, 0);
   }
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="flex items-center justify-between w-full max-w-[320px] mb-2">
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      autoFocus
+      onKeyDown={handleKeyDown}
+      style={{
+        backgroundImage: "url('/image/小游戏背景图.png')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        outline: "none",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "16px",
+        minHeight: "100%",
+        fontFamily: "'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+        userSelect: "none",
+      }}
+    >
+      {/* Top bar: back button + score */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          width: "100%",
+          maxWidth: 400,
+          marginBottom: 12,
+        }}
+      >
         <button
-          onClick={onBack}
-          className="text-sm text-purple-300 hover:text-purple-100 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            onBack();
+          }}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#d8b4fe",
+            fontSize: "0.95rem",
+            cursor: "pointer",
+            padding: "4px 8px",
+            borderRadius: 6,
+            transition: "color 0.2s",
+          }}
+          onMouseEnter={(e) => (e.target.style.color = "#f3e8ff")}
+          onMouseLeave={(e) => (e.target.style.color = "#d8b4fe")}
         >
           ← 返回
         </button>
+
+        <div
+          style={{
+            background: "rgba(30,18,51,0.45)",
+            color: "#f3e8ff",
+            fontWeight: "bold",
+            fontSize: "1.1rem",
+            padding: "6px 18px",
+            borderRadius: 10,
+            letterSpacing: 1,
+          }}
+        >
+          分数：{score}
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          background: "rgba(30,18,51,0.85)",
+          borderRadius: 14,
+          padding: 10,
+          width: "100%",
+          maxWidth: 400,
+          aspectRatio: "1 / 1",
+          display: "grid",
+          gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
+          gap: 8,
+          touchAction: "none",
+          position: "relative",
+          boxSizing: "border-box",
+        }}
+      >
+        {grid.flat().map((value, idx) => {
+          const bg = TILE_COLORS[value] || TILE_COLORS[2048];
+          const color = getTextColor(value);
+          const fontSize = getFontSize(value);
+          return (
+            <div
+              key={idx}
+              style={{
+                background: value === 0 ? "rgba(80,50,120,0.35)" : bg,
+                borderRadius: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: "bold",
+                fontSize,
+                color,
+                aspectRatio: "1 / 1",
+                transition: "background 0.15s ease",
+                boxShadow:
+                  value > 0
+                    ? "0 2px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1)"
+                    : "none",
+              }}
+            >
+              {value > 0 ? value : ""}
+            </div>
+          );
+        })}
+
+        {/* Game over overlay */}
         {gameOver && (
-          <button
-            onClick={resetGame}
-            className="text-sm px-3 py-1 rounded bg-purple-600 hover:bg-purple-500 text-white transition-colors"
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(30,18,51,0.9)",
+              borderRadius: 14,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 12,
+              zIndex: 10,
+            }}
           >
-            再来一局
-          </button>
+            <div
+              style={{
+                color: "#FFD700",
+                fontWeight: "bold",
+                fontSize: "1.7rem",
+              }}
+            >
+              游戏结束!
+            </div>
+            <div
+              style={{
+                color: "#f3e8ff",
+                fontSize: "1.1rem",
+              }}
+            >
+              最终分数：{score}
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                resetGame();
+              }}
+              style={{
+                marginTop: 8,
+                padding: "8px 24px",
+                borderRadius: 8,
+                border: "none",
+                background: "#a855f7",
+                color: "#fff",
+                fontWeight: "bold",
+                fontSize: "1rem",
+                cursor: "pointer",
+                transition: "background 0.2s",
+              }}
+              onMouseEnter={(e) => (e.target.style.background = "#9333ea")}
+              onMouseLeave={(e) => (e.target.style.background = "#a855f7")}
+            >
+              再来一局
+            </button>
+          </div>
         )}
       </div>
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="rounded-lg border border-purple-500/30"
-        style={{ touchAction: "none" }}
-      />
+
+      {/* Directional buttons */}
+      <div
+        style={{
+          marginTop: 16,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            move("up");
+            containerRef.current?.focus();
+          }}
+          style={btnStyle}
+          onMouseEnter={btnHoverIn}
+          onMouseLeave={btnHoverOut}
+        >
+          ↑
+        </button>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              move("left");
+              containerRef.current?.focus();
+            }}
+            style={btnStyle}
+            onMouseEnter={btnHoverIn}
+            onMouseLeave={btnHoverOut}
+          >
+            ←
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              move("down");
+              containerRef.current?.focus();
+            }}
+            style={btnStyle}
+            onMouseEnter={btnHoverIn}
+            onMouseLeave={btnHoverOut}
+          >
+            ↓
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              move("right");
+              containerRef.current?.focus();
+            }}
+            style={btnStyle}
+            onMouseEnter={btnHoverIn}
+            onMouseLeave={btnHoverOut}
+          >
+            →
+          </button>
+        </div>
+      </div>
     </div>
   );
+}
+
+const btnStyle = {
+  width: 52,
+  height: 52,
+  borderRadius: 10,
+  border: "none",
+  background: "rgba(168,85,247,0.7)",
+  color: "#fff",
+  fontWeight: "bold",
+  fontSize: "1.3rem",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  transition: "background 0.2s",
+  userSelect: "none",
+  WebkitTapHighlightColor: "transparent",
+};
+
+function btnHoverIn(e) {
+  e.currentTarget.style.background = "rgba(147,51,234,0.9)";
+}
+
+function btnHoverOut(e) {
+  e.currentTarget.style.background = "rgba(168,85,247,0.7)";
 }
