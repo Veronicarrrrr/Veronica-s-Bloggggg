@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 
 // ===== 调试开关 =====
-const DEBUG_HOTSPOTS = true;
+const DEBUG_HOTSPOTS = false;
 
 // ===== 交互物件配置 =====
 // ★ 书架、画板、人物由用户鼠标实测校准；其余按同比例修正
