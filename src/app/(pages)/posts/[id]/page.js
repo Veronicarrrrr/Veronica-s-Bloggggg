@@ -3,6 +3,38 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import MarkdownRenderer from "@/components/MarkdownRenderer";
+
+function CommentItem({ comment, depth = 0, user, onReply, onDelete, formatDate }) {
+  if (depth > 3) return null; // max 3 levels
+  return (
+    <div style={{ marginLeft: depth > 0 ? 24 : 0 }}>
+      <div className={`bg-purple-900/20 rounded-xl p-3 border border-purple-500/10 ${depth > 0 ? 'border-l-2 border-l-purple-500/30' : ''}`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center text-sm text-purple-300/60">
+            <span>👤 {comment.author.username}</span>
+            <span className="mx-2">·</span>
+            <span>{formatDate(comment.createdAt)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => onReply(comment)} className="text-purple-400/60 hover:text-purple-300 text-xs">回复</button>
+            {user && user.id === comment.authorId && (
+              <button onClick={() => onDelete(comment.id)} className="text-red-400/60 hover:text-red-400 text-xs">删除</button>
+            )}
+          </div>
+        </div>
+        <p className="text-gray-200 text-sm">{comment.content}</p>
+      </div>
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {comment.replies.map(reply => (
+            <CommentItem key={reply.id} comment={reply} depth={depth + 1} user={user} onReply={onReply} onDelete={onDelete} formatDate={formatDate} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PostDetailPage() {
   const { id } = useParams();
@@ -20,6 +52,7 @@ export default function PostDetailPage() {
   // 评论相关
   const [commentText, setCommentText] = useState("");
   const [commentLoading, setCommentLoading] = useState(false);
+  const [replyTo, setReplyTo] = useState(null); // { id, username }
 
   // 点赞相关
   const [liked, setLiked] = useState(false);
@@ -122,17 +155,15 @@ export default function PostDetailPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content: commentText }),
+        body: JSON.stringify({ content: commentText, parentId: replyTo?.id || null }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        setPost((prev) => ({
-          ...prev,
-          comments: [data.comment, ...prev.comments],
-          _count: { ...prev._count, comments: prev._count.comments + 1 },
-        }));
+        // Refresh post to get updated nested comments
+        fetchPost();
         setCommentText("");
+        setReplyTo(null);
       }
     } catch (err) {
       console.error("评论失败:", err);
@@ -156,11 +187,7 @@ export default function PostDetailPage() {
       );
 
       if (res.ok) {
-        setPost((prev) => ({
-          ...prev,
-          comments: prev.comments.filter((c) => c.id !== commentId),
-          _count: { ...prev._count, comments: prev._count.comments - 1 },
-        }));
+        fetchPost();
       }
     } catch (err) {
       console.error("删除评论失败:", err);
@@ -309,9 +336,7 @@ export default function PostDetailPage() {
 
           {/* 文章内容 */}
           <div className="bg-[#1e1233] rounded-xl p-6 border border-purple-500/10 mb-6">
-            <div className="whitespace-pre-wrap leading-relaxed text-gray-200">
-              {post.content}
-            </div>
+            <MarkdownRenderer content={post.content} />
           </div>
 
           {/* 点赞按钮 */}
@@ -344,11 +369,17 @@ export default function PostDetailPage() {
           {/* 评论输入框 */}
           {user ? (
             <form onSubmit={handleComment} className="mb-6">
+              {replyTo && (
+                <div className="flex items-center gap-2 mb-2 text-sm text-purple-300/60">
+                  <span>回复 @{replyTo.username}</span>
+                  <button onClick={() => setReplyTo(null)} className="text-red-400/60 hover:text-red-300">✕ 取消</button>
+                </div>
+              )}
               <textarea
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 className="w-full px-4 py-3 bg-purple-900/20 border border-purple-500/15 rounded-xl text-white focus:outline-none focus:border-purple-400/40 resize-y min-h-[100px]"
-                placeholder="写下你的评论..."
+                placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论..."}
                 required
               />
               <button
@@ -372,29 +403,19 @@ export default function PostDetailPage() {
             <p className="text-purple-300/40">还没有评论，来说点什么吧</p>
           ) : (
             <div className="space-y-4">
-              {post.comments.map((comment) => (
-                <div
-                  key={comment.id}
-                  className="bg-purple-900/20 rounded-xl p-4 border border-purple-500/10"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center text-sm text-purple-300/60">
-                      <span>👤 {comment.author.username}</span>
-                      <span className="mx-2">·</span>
-                      <span>{formatDate(comment.createdAt)}</span>
-                    </div>
-                    {user && user.id === comment.authorId && (
-                      <button
-                        onClick={() => handleDeleteComment(comment.id)}
-                        className="text-red-400/60 hover:text-red-400 text-sm"
-                      >
-                        删除
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-gray-200">{comment.content}</p>
-                </div>
-              ))}
+              {post.comments
+                .filter((comment) => comment.parentId === null || comment.parentId === undefined)
+                .map((comment) => (
+                  <CommentItem
+                    key={comment.id}
+                    comment={comment}
+                    depth={0}
+                    user={user}
+                    onReply={(c) => setReplyTo({ id: c.id, username: c.author.username })}
+                    onDelete={handleDeleteComment}
+                    formatDate={formatDate}
+                  />
+                ))}
             </div>
           )}
         </section>

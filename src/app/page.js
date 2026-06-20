@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PixelRoom from "@/components/PixelRoom";
 import Modal from "@/components/Modal";
+import GameLobby from "@/components/games/GameLobby";
+import Game2048 from "@/components/games/Game2048";
+import MatchGame from "@/components/games/MatchGame";
+import FishGame from "@/components/games/FishGame";
 
 // 博主信息
 const BLOG_OWNER = {
@@ -13,109 +17,15 @@ const BLOG_OWNER = {
   avatar: "🧙‍♀️",
 };
 
-// ===== 日历组件 =====
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+// ===== 游戏面板 =====
+function GamesPanel({ onClose }) {
+  const [currentGame, setCurrentGame] = useState(null);
 
-function CalendarView() {
-  const [viewDate, setViewDate] = useState(() => new Date());
+  if (currentGame === "2048") return <Game2048 onBack={() => setCurrentGame(null)} />;
+  if (currentGame === "match") return <MatchGame onBack={() => setCurrentGame(null)} />;
+  if (currentGame === "fish") return <FishGame onBack={() => setCurrentGame(null)} />;
 
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-
-  // 当月第一天是星期几、当月天数
-  const firstDayOfWeek = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  // 判断是否是"今天"
-  const today = new Date();
-  const isToday = (d) =>
-    d === today.getDate() &&
-    month === today.getMonth() &&
-    year === today.getFullYear();
-
-  const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
-  const goToday = () => setViewDate(new Date());
-
-  // 构建日历格子
-  const cells = [];
-  for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  return (
-    <div>
-      {/* 月份导航 */}
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={prevMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-purple-800/40 text-purple-300 transition"
-        >
-          ‹
-        </button>
-        <div className="text-center">
-          <span className="text-white font-bold text-lg">
-            {year}年{month + 1}月
-          </span>
-          <button
-            onClick={goToday}
-            className="ml-2 text-purple-400 text-xs hover:text-purple-300 transition"
-          >
-            今天
-          </button>
-        </div>
-        <button
-          onClick={nextMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-purple-800/40 text-purple-300 transition"
-        >
-          ›
-        </button>
-      </div>
-
-      {/* 星期表头 */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {WEEKDAYS.map((w) => (
-          <div
-            key={w}
-            className="text-center text-purple-400/60 text-xs font-bold py-1"
-          >
-            {w}
-          </div>
-        ))}
-      </div>
-
-      {/* 日期格子 */}
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((day, i) => (
-          <div
-            key={i}
-            className={`aspect-square flex items-center justify-center rounded-lg text-sm transition ${
-              day === null
-                ? ""
-                : isToday(day)
-                ? "bg-purple-600 text-white font-bold shadow-lg shadow-purple-500/30"
-                : "text-gray-300 hover:bg-purple-900/40"
-            }`}
-          >
-            {day && (
-              <span>
-                {day}
-                {isToday(day) && (
-                  <span className="block text-[10px] font-normal -mt-0.5">
-                    今天
-                  </span>
-                )}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* 底部装饰 */}
-      <p className="text-center text-purple-400/30 text-xs mt-4">
-        🌙 今晚也要早点休息哦~
-      </p>
-    </div>
-  );
+  return <GameLobby onSelectGame={setCurrentGame} onClose={onClose} />;
 }
 
 // ===== 衣橱商品 =====
@@ -188,6 +98,18 @@ export default function Home() {
       }
     }
 
+    // Handle GitHub OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    const callbackToken = params.get("token");
+    const callbackUser = params.get("user");
+    if (callbackToken && callbackUser) {
+      localStorage.setItem("token", callbackToken);
+      localStorage.setItem("user", callbackUser);
+      setVisitor(JSON.parse(callbackUser));
+      // Clean URL
+      window.history.replaceState({}, "", "/");
+    }
+
     // 加载衣橱数据
     const savedOutfits = localStorage.getItem("ownedOutfits");
     if (savedOutfits) setOwnedOutfits(JSON.parse(savedOutfits));
@@ -255,7 +177,7 @@ export default function Home() {
           setModal({ open: true, type: "window" });
           break;
         case "bed":
-          setModal({ open: true, type: "calendar" });
+          setModal({ open: true, type: "games" });
           break;
       }
     },
@@ -700,14 +622,14 @@ export default function Home() {
       </Modal>
 
       {/* ========================================== */}
-      {/*              🛏️ 床铺 — 日历                 */}
+      {/*              🛏️ 床铺 — 小游戏               */}
       {/* ========================================== */}
       <Modal
-        isOpen={modal.open && modal.type === "calendar"}
+        isOpen={modal.open && modal.type === "games"}
         onClose={closeModal}
-        title="🛏️ 床铺 — 日历"
+        title="🎮 游戏大厅"
       >
-        <CalendarView />
+        <GamesPanel onClose={closeModal} />
       </Modal>
     </div>
   );

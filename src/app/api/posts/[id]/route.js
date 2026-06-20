@@ -22,10 +22,27 @@ export async function GET(request, { params }) {
           select: { id: true, username: true, avatar: true, bio: true },
         },
         comments: {
+          where: { parentId: null }, // only top-level
           orderBy: { createdAt: "desc" },
           include: {
-            author: {
-              select: { id: true, username: true, avatar: true },
+            author: { select: { id: true, username: true, avatar: true } },
+            replies: {
+              orderBy: { createdAt: "asc" },
+              include: {
+                author: { select: { id: true, username: true, avatar: true } },
+                replies: {
+                  orderBy: { createdAt: "asc" },
+                  include: {
+                    author: { select: { id: true, username: true, avatar: true } },
+                    replies: {
+                      orderBy: { createdAt: "asc" },
+                      include: {
+                        author: { select: { id: true, username: true, avatar: true } },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },

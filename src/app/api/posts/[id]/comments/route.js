@@ -11,7 +11,7 @@ export async function POST(request, { params }) {
     }
 
     const { id } = await params;
-    const { content } = await request.json();
+    const { content, parentId } = await request.json();
 
     if (!content || content.trim().length === 0) {
       return NextResponse.json({ error: "评论内容不能为空" }, { status: 400 });
@@ -28,6 +28,7 @@ export async function POST(request, { params }) {
         content: content.trim(),
         postId: id,
         authorId: user.id,
+        parentId: parentId || null,
       },
       include: {
         author: {
