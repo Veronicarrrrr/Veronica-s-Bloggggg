@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  avatar    String?
+  bio       String?
+  createdAt DateTime @default(now())
+  githubId  String?  @unique
+  avatarUrl String?
+
+  posts            Post[]
+  comments         Comment[]
+  likes            Like[]
+  guestbookEntries GuestbookEntry[]
+}
+
+// 文章表
+model Post {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author   User      @relation(fields: [authorId], references: [id])
+  authorId String
+
+  comments Comment[]
+  likes    Like[]
+}
+
+// 评论表
+model Comment {
+  id        String    @id @default(cuid())
+  content   String
+  createdAt DateTime  @default(now())
+  post      Post      @relation(fields: [postId], references: [id])
+  postId    String
+  author    User      @relation(fields: [authorId], references: [id])
+  authorId  String
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+}
+
+// 点赞表
+model Like {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  post   Post   @relation(fields: [postId], references: [id])
+  postId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  @@unique([postId, userId])
+}
+
+// 访客留言板（画板）
+model GuestbookEntry {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+}
