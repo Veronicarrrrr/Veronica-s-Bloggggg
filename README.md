@@ -1,5 +1,12 @@
 # 天才小钻大将军的异次元空间 🏠✨
 
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss)
+![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?logo=sqlite)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 ## 🏠 项目简介
 
 这是一个**像素风个人博客**，融合了互动小游戏与像素小屋主题。
@@ -75,6 +82,23 @@ GITHUB_CLIENT_SECRET="your-github-client-secret"
 # 编辑密码哈希（博主编辑验证）
 EDIT_PASSWORD_HASH="your-bcrypt-hash"
 ```
+
+## 📸 项目截图
+
+> 像素风小屋主界面 — 点击房间物件开启对应功能
+
+## 📚 项目文档
+
+- [开发指南](docs/DEVELOPMENT.md) — 技术架构、API 路由、目录结构
+- [交互指南](docs/GAMEPLAY.md) — 物件交互说明、游戏玩法
+
+## 👩‍💻 作者
+
+**Veronica** — [GitHub @Veronicarrrrr](https://github.com/Veronicarrrrr)
+
+## 📄 License
+
+[MIT](LICENSE)
 
 ---
 
