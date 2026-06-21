@@ -195,7 +195,6 @@ export default function Home() {
   const [modal, setModal] = useState({ open: false, type: null });
   const [posts, setPosts] = useState([]);
   const [catSleeping, setCatSleeping] = useState(false);
-  const [characterProfile, setCharacterProfile] = useState(false);
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
   const [wardrobeSelected, setWardrobeSelected] = useState(null); // outfit id or null
 
@@ -298,7 +297,7 @@ export default function Home() {
           setModal({ open: true, type: "guestbook" });
           break;
         case "character":
-          setCharacterProfile(true);
+          // 不再弹出图片
           break;
         case "cat":
           setCatSleeping(true);
@@ -412,26 +411,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* ===== 🧙‍♀️ 人物身份 — 全屏覆盖 ===== */}
-      {characterProfile && (
-        <div className="fixed inset-0 z-[100] bg-[#1a0e2e] flex flex-col items-center justify-center">
-          <div className="relative w-full h-full">
-            <img
-              src="/image/身份交互界面.png"
-              className="w-full h-full object-contain"
-              style={{ imageRendering: "pixelated" }}
-              alt="人物身份信息"
-              draggable={false}
-            />
-            <button
-              onClick={() => setCharacterProfile(false)}
-              className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 px-6 py-2.5 bg-purple-600/80 hover:bg-purple-500 text-white rounded-full font-bold transition-all backdrop-blur-sm border border-purple-400/30 shadow-lg hover:shadow-purple-500/30"
-            >
-              🏠 返回小屋
-            </button>
-          </div>
-        </div>
-      )}
 
       <PixelRoom
         user={{ username: BLOG_OWNER.name }}
